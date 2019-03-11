@@ -4,7 +4,8 @@
 
 	1999-11-04:	Add 68030 instructions,
 				Add labels.
-	2019-03-10:	Remove conio dependency, fix modern C build errors. */
+	2019-03-10:	Remove conio dependency, fix modern C build errors.
+	onward: 	see Git history. */
 
 
 #include <stdio.h>
@@ -13,7 +14,8 @@
 #include <string.h>
 
 
-int diag = 0; /* 1 to diagnose, 0 to run */
+// Enable the #define below to print diagnostics.
+//#define PRINT_DIAGNOSTICS
 
 FILE  *fin, *fout, *fmap;
 struct OpcodeDetails {
@@ -304,10 +306,10 @@ void disasm(unsigned long int start, unsigned long int end) {
 		for (opnum=1; opnum <= 87; opnum++) {
 			check = (word & optab[opnum].and) ^ optab[opnum].xor;
 			if (check == 0) {
+#ifdef PRINT_DIAGNOSTICS
 				/* Diagnostic code */
-				if (diag != 0) {
-				  printf("(%i) ",opnum);
-				}
+				printf("(%i) ",opnum);
+#endif
 
 				switch(opnum) { /* opnum = 1..85 */
 					case 1  :
@@ -336,10 +338,10 @@ void disasm(unsigned long int start, unsigned long int end) {
 						dmode = getmode(word);
 						dreg = (word & 0x0007);
 						size = (word & 0x00C0) >> 6;
+#ifdef PRINT_DIAGNOSTICS
 						/* Diagnostic code */
-						if (diag != 0) {
-							printf("dmode = %i, dreg = %i, size = %i",dmode,dreg,size);
-						}
+						printf("dmode = %i, dreg = %i, size = %i",dmode,dreg,size);
+#endif
 						if (size == 3) break;
 						/*
 						if (dmode == 1) break;
