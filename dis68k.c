@@ -17,7 +17,7 @@
 // Enable the #define below to print diagnostics.
 //#define PRINT_DIAGNOSTICS
 
-FILE  *fin, *fout, *fmap;
+FILE  *fin, *fmap;
 struct OpcodeDetails {
 	unsigned int and;
 	unsigned int xor;
@@ -50,7 +50,6 @@ const struct OpcodeDetails optab[88] = {
 
 unsigned long int ad, romstart;
 int fetched;
-int to_file = 0;
 int rawmode = 0;
 
 struct {
@@ -133,9 +132,6 @@ unsigned int getbyte(FILE *f) {
 	if (feof(f)) exit(2);
 	ad ++;
 	printf("%02X ",W);
-	if (to_file == 1) {
-		fprintf(fout,"%02X ",W);
-	}
 	return(W);
 }
 
@@ -150,9 +146,6 @@ unsigned int getword(FILE *f) {
 	ad += 2;
 	if (!rawmode) {
 		printf("%04X ",W);
-		if (to_file == 1) {
-			fprintf(fout,"%04X ",W);
-		}
 	}
 	fetched ++;
 	return(W);
@@ -290,14 +283,8 @@ void disasm(unsigned long int start, unsigned long int end) {
 	while (!feof(fin) && (ad < end)) {
 		if (!rawmode) {
 			printf("%08lX : ",ad);
-			if (to_file == 1) {
-				fprintf(fout,"%08lX : ",ad);
-			}
 		} else {
 			printf("        ");
-			if (to_file == 1) {
-				fprintf(fout,"        ");
-			}
 		}
 		fetched = 0; /* number of words for this instr. */
 		word = getword(fin);
@@ -1098,20 +1085,11 @@ void disasm(unsigned long int start, unsigned long int end) {
 
 		if (!rawmode) {
 			for (i=0;i<(5-fetched);i++) printf("     ");
-			if (to_file == 1) {
-				for (i=0;i<(5-fetched);i++) fprintf(fout,"     ");
-			}
 		}
 		if (decoded != 0) {
 			printf("%-8s %s\n",opcode_s,operand_s);
-			if (to_file == 1) {
-				fprintf(fout,"%-8s %s\n",opcode_s,operand_s);
-			}
 		} else {
 			printf("???\n");
-			if (to_file == 1) {
-				fprintf(fout,"???\n");
-			}
 		}
 
 		if (decoded > 1) getchar(); /* to search for specified codes */
@@ -1134,9 +1112,6 @@ void hexdump(unsigned long int start, unsigned long int end) {
 
 	while (!feof(fin) && (ad < end)) {
 		printf("%08lX : ",ad);
-		if (to_file == 1) {
-			fprintf(fout,"%08lX : ",ad);
-		}
 		range = (end-ad);
 		if (range >= 15) {
 			for (i=0; i<=15; i++) {
@@ -1151,15 +1126,9 @@ void hexdump(unsigned long int start, unsigned long int end) {
 					else s[i] = '.';
 			}
 			for (j=0; j<=(15-i); j++) printf("   ");
-			if (to_file == 1) {
-				for (j=0; j<=(15-i); j++) fprintf(fout,"   ");
-			}
 		}
 		s[i] = '\0';
 		printf("%s\n",s);
-		if (to_file == 1) {
-			fprintf(fout,"%s\n",s);
-		}
 	}
 }
 
@@ -1207,46 +1176,26 @@ int main(int argc, char *argv[]) {
 	strcat(mapfilename,".MAP");
 
 	if (argc == 3) {
-		if (strcmp(argv[2],"/f")==0 || strcmp(argv[2],"/r")==0) {
-			printf("Writing output to file %s\n",disfilename);
-			to_file = 1;
-
-			if (strcmp(argv[2],"/r")==0) {
-				printf("Writing in 'raw' mode.\n");
-				rawmode = 1;
-			}
+		if (strcmp(argv[2],"/r")==0) {
+			printf("Writing in 'raw' mode.\n");
+			rawmode = 1;
 		}
-	} else {
-		to_file = 0;
 	}
 
 	readmap(mapfilename);
-
-	if (to_file == 0) {
-		printf("\nHit RETURN to start ...\n");
-		getchar();
-	}
 
 	if ((fin = fopen(binfilename,"rb")) == NULL) { /* read binary file */
 		printf("%s does not exist\n", binfilename);
 		exit(1);
 	}
-	if (to_file == 1) {
-		if ((fout = fopen(disfilename,"wt")) == NULL) { /* write text file */
-			printf("Cannot open output file !\n");
-			exit(1);
-		}
-	}
 
 	i = 0;
 	while (map[i].type != End) {
 		printf("\n");
-		if (to_file == 1) fprintf(fout,"\n");
 		if (map[i].type == Data) hexdump(map[i].start, map[i].end);
 		if (map[i].type == Code) disasm(map[i].start, map[i].end);
 		i++;
 	}
 	fclose(fin);
-	fclose(fout);
 	return 0;
 }
