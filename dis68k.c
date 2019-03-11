@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
 
@@ -50,7 +51,7 @@ const struct OpcodeDetails optab[88] = {
 
 unsigned long int ad, romstart;
 int fetched;
-int rawmode = 0;
+bool rawmode = false;
 
 struct {
 	unsigned long int start;
@@ -1178,7 +1179,7 @@ int main(int argc, char *argv[]) {
 	if (argc == 3) {
 		if (strcmp(argv[2],"/r")==0) {
 			printf("Writing in 'raw' mode.\n");
-			rawmode = 1;
+			rawmode = true;
 		}
 	}
 
