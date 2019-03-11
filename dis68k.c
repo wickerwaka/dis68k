@@ -3,14 +3,14 @@
    Current version 1.21, adds "raw" disasm output, ie ready to re-assemble
 
    1999-11-04: Add 68030 instructions,
-               Add labels. */
+               Add labels.
+   2019-03-10: Remove conio dependency. */
 
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <conio.h>
 
 
 int diag = 0; /* 1 to diagnose, 0 to run */
@@ -82,12 +82,12 @@ char *filename;
     p = 0;
     p = fscanf(fmap,"romstart = %lX",&romstart);
     if (p==0) {
-      printf("Error in romstart = %lX line!\n");
+      printf("Error in romstart = line!\n");
       exit(1);
     }
     index = 0;
     while ((!feof(fmap)) && (p >= 0)) {
-      p = fscanf(fmap,"%lX,%lX,%s", &start, &end, &type);
+      p = fscanf(fmap,"%lX,%lX,%s", &start, &end, type);
       if (p > 0) {
 	printf("%s from $%08lX to $%08lX\n",type,start,end);
 	map[index].start = start;
@@ -183,9 +183,9 @@ char *out_s;
 	      } else {
 		     ldata = (ad-2+disp);
            if (!rawmode) {
-		       sprintf(out_s,"%+i(PC) {$%08lX}",disp,ldata);
+		       sprintf(out_s,"%+li(PC) {$%08li}",disp,ldata);
            } else {
-             sprintf(out_s,"%+i(PC)",disp);
+             sprintf(out_s,"%+li(PC)",disp);
            }
 	      }
 	      break;
@@ -199,15 +199,15 @@ char *out_s;
 	      isize = (data & 0x0800) >> 11; /* == 0 is .W else .L */
 	      if (mode == 6) {
 		if (itype == 0) {
-		  sprintf(out_s,"%+i(A%i,D%i.%c)",disp,reg,ireg,ir[isize]);
+		  sprintf(out_s,"%+li(A%i,D%i.%c)",disp,reg,ireg,ir[isize]);
 		} else {
-		  sprintf(out_s,"%+i(A%i,A%i.%c)",disp,reg,ireg,ir[isize]);
+		  sprintf(out_s,"%+li(A%i,A%i.%c)",disp,reg,ireg,ir[isize]);
 		}
 	      } else { /* PC */
 		if (itype == 0) {
-		  sprintf(out_s,"%+i(PC,D%i.%c)",disp,ireg,ir[isize]);
+		  sprintf(out_s,"%+li(PC,D%i.%c)",disp,ireg,ir[isize]);
 		} else {
-		  sprintf(out_s,"%+i(PC,A%i.%c)",disp,ireg,ir[isize]);
+		  sprintf(out_s,"%+li(PC,A%i.%c)",disp,ireg,ir[isize]);
 		}
 	      }
 	      break;
@@ -563,7 +563,7 @@ unsigned long int start, end;
             if (!rawmode) {
 		        sprintf(operand_s,"$%08lX",ad+offset);
             } else {
-		        sprintf(operand_s,"*%+d",offset);
+		        sprintf(operand_s,"*%+ld",offset);
             }
 		    } else {
 		      offset = (long) getword(fin);
@@ -571,7 +571,7 @@ unsigned long int start, end;
 		      if (!rawmode) {
               sprintf(operand_s,"$%08lX",ad-2+offset);
             } else {
-		        sprintf(operand_s,"*%+d",offset);
+		        sprintf(operand_s,"*%+ld",offset);
             }
 		    }
 		    decoded = 1;
@@ -599,7 +599,7 @@ unsigned long int start, end;
 				sprintf(opcode_s,"BCHG");
 				data = getword(fin);
 				data = data & 0x002F;
-				sprintf(source_s,"#",data);
+				sprintf(source_s,"#%i",data);
 				break;
 		      case 16 : /* BCLR_DREG */
 				sprintf(opcode_s,"BCLR");
@@ -768,7 +768,7 @@ unsigned long int start, end;
 		    offset = (long) getword(fin);
 		    if (offset >= 32768l) offset -= 65536l;
 		    sprintf(opcode_s,"LINK");
-		    sprintf(operand_s,"A%i,#%+i",areg,offset);
+		    sprintf(operand_s,"A%i,#%+li",areg,offset);
 		    decoded = 1;
 		    break;
 	  case 43 : /* MOVE */
@@ -814,7 +814,7 @@ unsigned long int start, end;
 	  case 44 : /* MOVE to CCR */
 	  case 45 : /* MOVE to SR */
 		    smode = getmode(word);
-		    sreg = (word && 0x0007);
+		    sreg = (word & 0x0007);
 		    size = 1; /* WORD */
 		    if (smode == 1) break;
 		    if (smode >= 12) break;
@@ -829,7 +829,7 @@ unsigned long int start, end;
 		    break;
 	  case 46 : /* MOVE from SR */
 		    dmode = getmode(word);
-		    dreg = (word && 0x0007);
+		    dreg = (word & 0x0007);
 		    size = 1; /* WORD */
 		    if (dmode == 1) break;
 		    if (dmode >= 9) break;
@@ -1114,7 +1114,7 @@ unsigned long int start, end;
       }
     }
 
-    if (decoded > 1) getch(); /* to search for specified codes */
+    if (decoded > 1) getchar(); /* to search for specified codes */
 				     /* used by setting decoded = 2 */
 
   }
@@ -1168,7 +1168,7 @@ unsigned long int start, end;
 }
 
 
-void main(argc, argv)
+int main(argc, argv)
 int argc;
 char *argv[];
 {
@@ -1197,7 +1197,6 @@ char *argv[];
     exit(1);
   }
   strcpy(filename,argv[1]);
-  strupr(filename);
   for (i=0; i<strlen(filename);i++) {
     if (filename[i] == '.') {
       printf("No extensions allowed in filename :\n\n");
@@ -1232,7 +1231,7 @@ char *argv[];
 
   if (to_file == 0) {
     printf("\nHit RETURN to start ...\n");
-    getch();
+    getchar();
   }
 
   if ((fin = fopen(binfilename,"rb")) == NULL) { /* read binary file */
@@ -1256,4 +1255,5 @@ char *argv[];
   }
   fclose(fin);
   fclose(fout);
+  return 0;
 }
