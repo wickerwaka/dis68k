@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <string.h>
 
@@ -20,8 +21,8 @@
 
 FILE  *fin, *fmap;
 struct OpcodeDetails {
-	unsigned int and;
-	unsigned int xor;
+	uint16_t and;
+	uint16_t xor;
 };
 
 const struct OpcodeDetails optab[88] = {
@@ -49,13 +50,13 @@ const struct OpcodeDetails optab[88] = {
 	{0xFFF0,0x4E40}, {0xFFFF,0x4E76}, {0xFF00,0x4A00}, {0xFFF8,0x4E58}
 };
 
-unsigned long int ad, romstart;
+uint32_t ad, romstart;
 int fetched;
 bool rawmode = false;
 
 struct {
-	unsigned long int start;
-	unsigned long int end;
+	uint32_t start;
+	uint32_t end;
 	enum Type {
 		End,
 		Data,
@@ -78,50 +79,49 @@ char scc_tab[][4] = {
 char size_arr[3] = {'B','W','L'};
 
 void readmap(const char *filename) {
-	int p;
-	int index;
-	unsigned long int start, end;
-	char type[10]; /* "code" or "data" */
-
 	if ((fmap = fopen(filename,"rt")) == NULL) {
-		printf("Map file %s not found - Assumed all code, no data.\n",filename);
+		printf("Map file %s not found - Assumed all code, no data.\n", filename);
 		romstart = 0;
 		map[0].start = 0L;
 		map[0].end = 0x7ffffffL;
 		map[0].type = Code;
 		map[1].type = End;
 	} else {
-		p = 0;
-		p = fscanf(fmap,"romstart = %lX",&romstart);
-		if (p==0) {
+		if (!fscanf(fmap,"romstart = %X", &romstart)) {
 			printf("Error in romstart = line!\n");
 			exit(1);
 		}
-		index = 0;
-		while ((!feof(fmap)) && (p >= 0)) {
-			p = fscanf(fmap,"%lX,%lX,%s", &start, &end, type);
-			if (p > 0) {
-				printf("%s from $%08lX to $%08lX\n",type,start,end);
+
+		size_t index = 0;
+		while (!feof(fmap)) {
+			uint32_t start, end;
+			char type[10]; /* "code" or "data" */
+
+			if (fscanf(fmap,"%X,%X,%s", &start, &end, type)) {
+				printf("%s from $%08X to $%08X\n", type, start, end);
 				map[index].start = start;
 				map[index].end = end;
 				map[index].type = End;
 				if(strcmp(type,"data")==0) map[index].type = Data;
 				if(strcmp(type,"code")==0) map[index].type = Code;
 				if (map[index].type == End) {
-					printf("Error in map file line %i ('code' or 'data' misspelt)\n",index+2);
+					printf("Error in map file line %lu ('code' or 'data' misspelt)\n", index+2);
 					exit(1);
 				}
-				index ++;
+				++ index;
 				if (index > 99) {
 					printf("Sorry, this version allows 100 map entries only.\n");
 					printf("Please register and ask for a customised program\n");
 					printf("that will meet your needs.\n");
 					exit(1);
 				}
+			} else {
+				break;
 			}
 		}
+
 		map[index].type = End;
-		printf("%i Entries read.\n",index-1);
+		printf("%lu Entries read.\n", index-1);
 		fclose(fmap);
 	}
 }
@@ -283,7 +283,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 
 	while (!feof(fin) && (ad < end)) {
 		if (!rawmode) {
-			printf("%08lX : ",ad);
+			printf("%08X : ",ad);
 		} else {
 			printf("        ");
 		}
@@ -1112,7 +1112,7 @@ void hexdump(unsigned long int start, unsigned long int end) {
 	fseek(fin,(ad-romstart),SEEK_SET); /* seek to address from file start */
 
 	while (!feof(fin) && (ad < end)) {
-		printf("%08lX : ",ad);
+		printf("%08X : ",ad);
 		range = (end-ad);
 		if (range >= 15) {
 			for (i=0; i<=15; i++) {
