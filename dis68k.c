@@ -269,7 +269,7 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 				} break;
 			}
 		} break;
-		default : fprintf(stderr, "mode out of range in sprintmode = %i\n", mode);
+		default : fprintf(stderr, "Mode out of range in sprintmode = %i\n", mode);
 			break;
 	}
 }
@@ -288,7 +288,7 @@ int getmode(int instruction) {
 		if (reg >= 5) {
 			return 12; /* i.e. invalid */
 		} else {
-			return 7 + instruction;
+			return 7 + reg;
 		}
 	}
 	return mode;
@@ -1158,7 +1158,7 @@ void datadump(uint32_t start, uint32_t end) {
 
 		for (int i = 0; i < bytes_to_print; ++i) {
 			const int byte = getbyte();
-			fputc(isprint(byte) ? byte : '.', stdout);
+			printf("%c ", isprint(byte) ? byte : '.');
 		}
 		fputc('\n', stdout);
 	}
