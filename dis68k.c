@@ -49,7 +49,7 @@ const struct OpcodeDetails optab[88] = {
 	{0xFFF0,0x4E40}, {0xFFFF,0x4E76}, {0xFF00,0x4A00}, {0xFFF8,0x4E58}
 };
 
-uint32_t ad, romstart;
+uint32_t address, romstart;
 int fetched;
 bool rawmode = false;
 
@@ -63,19 +63,19 @@ struct MapEntry {
 	} type;
 } *map = NULL;
 
-char bra_tab[][4] = {
+const char bra_tab[][4] = {
 	"BRA",	"BSR",	"BHI",	"BLS",
 	"BCC",	"BCS",	"BNE",	"BEQ",
 	"BVC",	"BVS",	"BPL",	"BMI",
 	"BGE",	"BLT",	"BGT",	"BLE"
 };
-char scc_tab[][4] = {
+const char scc_tab[][4] = {
 	"ST",	"SF",	"SHI",	"SLS",
 	"SCC",	"SCS",	"SNE",	"SEQ",
 	"SVC",	"SVS",	"SPL",	"SMI",
 	"SGE",	"SLT",	"SGT",	"SLE"
 };
-char size_arr[3] = {'B','W','L'};
+const char size_arr[3] = {'B','W','L'};
 
 /*!
 	Reads from @c filename and populates the global variable @c map.
@@ -155,133 +155,143 @@ bool readmap(const char *filename) {
 	return true;
 }
 
-unsigned int getbyte(FILE *f) {
-	unsigned int W;
-
-	W = fgetc(f);
-	if (feof(f)) exit(2);
-	ad ++;
-	printf("%02X ",W);
-	return(W);
+/*!
+	Gets and echoes the next byte from stdin and increments the global @c address;
+	if stdin is exhausted, prints an error and causes the program to exit with
+	code EXIT_FAILURE.
+*/
+unsigned int getbyte() {
+	const int byte = fgetc(stdin);
+	if (feof(stdin)) {
+		fprintf(stderr, "Unexpected end of input\n");
+		exit(EXIT_FAILURE);
+	}
+	++ address;
+	printf("%02x ", byte);
+	return byte;
 }
 
-unsigned int getword(FILE *f) {
-	unsigned int w,W;
+/*!
+	Gets and echoes the next word from stdin and increments the global @c address twice;
+	if stdin is exhausted, prints an error and causes the program to exit with
+	code EXIT_FAILURE.
+*/
+unsigned int getword() {
+	int word = fgetc(stdin) << 8;
+	word |= fgetc(stdin);
 
-	w = fgetc(f);
-	W = 256*w;
-	w = fgetc(f);
-	if (feof(f)) exit(2);
-	W += w;
-	ad += 2;
+	if (feof(stdin)) {
+		fprintf(stderr, "Unexpected end of input\n");
+		exit(EXIT_FAILURE);
+	}
+
+	address += 2;
 	if (!rawmode) {
-		printf("%04X ",W);
+		printf("%04x ", word);
 	}
 	fetched ++;
-	return(W);
+	return word;
 }
 
-void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *out_s) {
-	/*	In this case, mode = 0..12
-		and size = 0,byte 1,word and 2,long */
+/*!
+	Prints the addressing mode @c mode, using @c reg and @c size, to @c out_s.
 
-	long int disp;
-	unsigned int data, data1;
-	unsigned long int ldata;
-	int ireg, itype, isize; /* for mode 6 */
-	char ir[2] = {'W','L'}; /* for mode 6 */
+	@param mode 0 to 12, indicating addressing mode.
+	@param size 0 = byte, 1 = word, 2 = long.
+*/
+void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *out_s) {
+	const char ir[2] = {'W','L'}; /* for mode 6 */
 
 	switch(mode) {
-		case 0  : sprintf(out_s,"D%i",reg);
-			break;
-		case 1  : sprintf(out_s,"A%i",reg);
-			break;
-		case 2  : sprintf(out_s,"(A%i)",reg);
-			break;
-		case 3  : sprintf(out_s,"(A%i)+",reg);
-			break;
-		case 4  : sprintf(out_s,"-(A%i)",reg);
-			break;
+		case 0  : sprintf(out_s, "D%i", reg);		break;
+		case 1  : sprintf(out_s, "A%i", reg);		break;
+		case 2  : sprintf(out_s, "(A%i)", reg);		break;
+		case 3  : sprintf(out_s, "(A%i)+", reg);	break;
+		case 4  : sprintf(out_s, "-(A%i)", reg);	break;
 		case 5  : /* reg + disp */
-		case 9  : /* pcr + disp */
-			disp = (long) getword(stdin);
-			if (disp >= 32768l) disp -= 65536l;
+		case 9  : { /* pcr + disp */
+			int32_t displacement = (int32_t) getword();
+			if (displacement >= 32768) displacement -= 65536;
 			if (mode == 5) {
-				sprintf(out_s,"%+i(A%i)",(int)disp,reg);
+				sprintf(out_s, "%+i(A%i)", displacement, reg);
 			} else {
-				ldata = (ad-2+disp);
+				const uint32_t ldata = address - 2 + displacement;
 				if (!rawmode) {
-					sprintf(out_s,"%+li(PC) {$%08li}",disp,ldata);
+					sprintf(out_s, "%+i(PC) {$%08u}", displacement, ldata);
 				} else {
-					sprintf(out_s,"%+li(PC)",disp);
+					sprintf(out_s, "%+i(PC)", displacement);
 				}
 			}
-			break;
+		} break;
 		case 6  : /* Areg with index + disp */
-		case 10 : /* PC with index + disp */
-			data = getword(stdin); /* index and displacement data */
-			disp = (data & 0x00FF);
-			if (disp >= 128) disp-=256;
-			ireg = (data & 0x7000) >> 12;
-			itype = (data & 0x8000); /* == 0 is Dreg */
-			isize = (data & 0x0800) >> 11; /* == 0 is .W else .L */
+		case 10 : {/* PC with index + disp */
+			const int data = getword(); /* index and displacement data */
+
+			int displacement = (data & 0x00FF);
+			if (displacement >= 128) displacement -= 256;
+
+			const int ireg = (data & 0x7000) >> 12;
+			const int itype = (data & 0x8000); /* == 0 is Dreg */
+			const int isize = (data & 0x0800) >> 11; /* == 0 is .W else .L */
+
 			if (mode == 6) {
 				if (itype == 0) {
-					sprintf(out_s,"%+li(A%i,D%i.%c)",disp,reg,ireg,ir[isize]);
+					sprintf(out_s, "%+i(A%i,D%i.%c)", displacement, reg, ireg, ir[isize]);
 				} else {
-					sprintf(out_s,"%+li(A%i,A%i.%c)",disp,reg,ireg,ir[isize]);
+					sprintf(out_s, "%+i(A%i,A%i.%c)", displacement, reg, ireg, ir[isize]);
 				}
 			} else { /* PC */
 				if (itype == 0) {
-					sprintf(out_s,"%+li(PC,D%i.%c)",disp,ireg,ir[isize]);
+					sprintf(out_s, "%+i(PC,D%i.%c)", displacement, ireg, ir[isize]);
 				} else {
-					sprintf(out_s,"%+li(PC,A%i.%c)",disp,ireg,ir[isize]);
+					sprintf(out_s, "%+i(PC,A%i.%c)", displacement, ireg, ir[isize]);
 				}
 			}
+		} break;
+		case 7  :
+			sprintf(out_s, "$0000%04x", getword());
 			break;
-		case 7  : data = getword(stdin);
-			sprintf(out_s,"$0000%04X",data);
-			break;
-		case 8  : data = getword(stdin);
-			data1 = getword(stdin);
-			sprintf(out_s,"$%04X%04X",data,data1);
-			break;
-		case 11 : data = getword(stdin);
+		case 8  : {
+			const int data1 = getword();
+			const int data2 = getword();
+			sprintf(out_s, "$%04x%04x", data1, data2);
+		} break;
+		case 11 : {
+			const int data1 = getword();
 			switch(size) {
-				case 0 : sprintf(out_s,"#$%02X",(data & 0x00FF));
+				case 0 : sprintf(out_s, "#$%02x", (data1 & 0x00FF));
 					break;
-				case 1 : sprintf(out_s,"#$%04X",data);
+				case 1 : sprintf(out_s, "#$%04x", data1);
 					break;
-				case 2 : data1 = getword(stdin);
-					sprintf(out_s,"#$%04X%04X",data,data1);
-					break;
-			} /* switch(size) */
-			break;
-		default : printf("mode out of range in sprintmode = %i\n",mode);
+				case 2 : {
+					const int data2 = getword();
+					sprintf(out_s, "#$%04x%04x", data1, data2);
+				} break;
+			}
+		} break;
+		default : fprintf(stderr, "mode out of range in sprintmode = %i\n", mode);
 			break;
 	}
 }
 
-int getmode(int m) {
-	/* return 0..11 for the 6 bits in m as per table */
-	/* return 12 if mode not in table */
-	int mode;
-	int reg;
-	int ret_mode;
+/*!
+	Decodes the addressing mode from @c instruction.
 
-	mode = (m & 0x0038) >> 3;
-	reg = (m & 0x0007);
-	/* here we assume mode & reg = 0..7 */
+	@returns A mode in the range 0 to 11, if a valid addressing mode could be
+		determined; 12 otherwise.
+*/
+int getmode(int instruction) {
+	const int mode = (instruction & 0x0038) >> 3;
+	const int reg = (instruction & 0x0007);
+
 	if (mode == 7) {
 		if (reg >= 5) {
-			ret_mode = 12; /* invalid */
+			return 12; /* i.e. invalid */
 		} else {
-			ret_mode = (7+reg);
+			return 7 + instruction;
 		}
-	} else {
-		ret_mode = mode;
 	}
-	return(ret_mode);
+	return mode;
 }
 
 void disasm(unsigned long int start, unsigned long int end) {
@@ -303,20 +313,20 @@ void disasm(unsigned long int start, unsigned long int end) {
 	int dir; /* for AND etc. */
 	int rlist[11]; /* for MOVEM */
 
-	ad = start;
-	if (ad < romstart) {
+	address = start;
+	if (address < romstart) {
 		printf("Address < RomStart in disasm()!\n");
 		exit(1);
 	}
 
-	while (!feof(stdin) && (ad < end)) {
+	while (!feof(stdin) && (address < end)) {
 		if (!rawmode) {
-			printf("%08X : ",ad);
+			printf("%08x : ", address);
 		} else {
 			printf("        ");
 		}
 		fetched = 0; /* number of words for this instr. */
-		word = getword(stdin);
+		word = getword();
 		decoded = 0;
 
 		for (opnum=1; opnum <= 87; opnum++) {
@@ -436,13 +446,13 @@ void disasm(unsigned long int start, unsigned long int end) {
 							case 79 : sprintf(opcode_s,"SUBI.%c",size_arr[size]);
 								break;
 						}
-						data = getword(stdin);
+						data = getword();
 						switch(size) {
 							case 0 : sprintf(source_s,"#$%02X",(data & 0x00FF));
 								break;
 							case 1 : sprintf(source_s,"#$%04X",data);
 								break;
-							case 2 : data1 = getword(stdin);
+							case 2 : data1 = getword();
 								sprintf(source_s,"#$%04X%04X",data,data1);
 								break;
 						}
@@ -577,17 +587,17 @@ void disasm(unsigned long int start, unsigned long int end) {
 						if (offset != 0) {
 							if (offset >= 128) offset -= 256;
 							if (!rawmode) {
-								sprintf(operand_s,"$%08lX",ad+offset);
+								sprintf(operand_s, "$%08lx", address+offset);
 							} else {
-								sprintf(operand_s,"*%+ld",offset);
+								sprintf(operand_s, "*%+ld", offset);
 							}
 						} else {
-							offset = (long) getword(stdin);
+							offset = (long) getword();
 							if (offset >= 32768l) offset -= 65536l;
 							if (!rawmode) {
-								sprintf(operand_s,"$%08lX",ad-2+offset);
+								sprintf(operand_s, "$%08lx" , address-2+offset);
 							} else {
-								sprintf(operand_s,"*%+ld",offset);
+								sprintf(operand_s, "*%+ld", offset);
 							}
 						}
 						decoded = 1;
@@ -613,7 +623,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 15 : /* BCHG_IMM */
 								sprintf(opcode_s,"BCHG");
-								data = getword(stdin);
+								data = getword();
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -623,7 +633,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 17 : /* BCLR_IMM */
 								sprintf(opcode_s,"BCLR");
-								data = getword(stdin);
+								data = getword();
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -633,7 +643,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 19 : /* BSET_IMM */
 								sprintf(opcode_s,"BSET");
-								data = getword(stdin);
+								data = getword();
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -643,7 +653,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 21 : /* BTST_IMM */
 								sprintf(opcode_s,"BTST");
-								data = getword(stdin);
+								data = getword();
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -719,10 +729,10 @@ void disasm(unsigned long int start, unsigned long int end) {
 						sprintf(opcode_s,"D%s",bra_tab[cc]);
 						if (cc == 0) sprintf(opcode_s,"DBT");
 						if (cc == 1) sprintf(opcode_s,"DBF");
-						offset = (long) getword(stdin);
+						offset = (long) getword();
 						if (offset >= 32768l) offset -= 65536l;
 						dreg = (word & 0x0007);
-						sprintf(operand_s,"D%i,$%08lX ",dreg,ad-2+offset);
+						sprintf(operand_s,"D%i,$%08lx ", dreg, address-2+offset);
 						decoded = 1;
 						break;
 					case 33 : /* EXG */
@@ -781,7 +791,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						break;
 					case 38 : /* LINK */
 						areg = (word & 0x0007);
-						offset = (long) getword(stdin);
+						offset = (long) getword();
 						if (offset >= 32768l) offset -= 65536l;
 						sprintf(opcode_s,"LINK");
 						sprintf(operand_s,"A%i,#%+li",areg,offset);
@@ -890,7 +900,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						if ((dir == 0) && (dmode == 3)) break;
 						if ((dir == 1) && (dmode == 4)) break;
 
-						data = getword(stdin);
+						data = getword();
 						if (dmode == 4) { /* dir == 0 if dmode == 4 !! */
 							/* reverse bits in data */
 							temp = data;
@@ -973,7 +983,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						areg = (word & 0x0007);
 						size = ((word & 0x0040) >> 6) + 1;
 						if (size == 3) break;
-						data = getword(stdin);
+						data = getword();
 						sprintf(opcode_s,"MOVEP.%c",size_arr[size]);
 						if ((word & 0x0080) == 0) {
 							/* mem -> data reg */
@@ -1126,37 +1136,31 @@ void disasm(unsigned long int start, unsigned long int end) {
 	}
 }
 
-void hexdump(unsigned long int start, unsigned long int end) {
-	int i,j;
-	unsigned long int range;
-	unsigned int b;
-	char s[17];
+/*!
+	Consumes end - start input bytes and outputs them as a data segment;
+	at exit the global @c address is equal to @c end.
 
-	ad = start;
-	if (ad < romstart) {
-		printf("Address < RomStart in hexdump()!\n");
-		exit(1);
+	Any bytes that are within the printable character range are output as
+	those characters; full stops fill in for unprintable characters.
+*/
+void datadump(uint32_t start, uint32_t end) {
+	address = start;
+	if (address < romstart) {
+		fprintf(stderr, "Address < RomStart in datadump()!\n");
+		exit(EXIT_FAILURE);
 	}
 
-	while (!feof(stdin) && (ad < end)) {
-		printf("%08X : ",ad);
-		range = (end-ad);
-		if (range >= 15) {
-			for (i=0; i<=15; i++) {
-				b = getbyte(stdin);
-				if (isprint(b)) s[i] = b;
-				else s[i] = '.';
-			}
-		} else {
-			for (i=0; i<=range; i++) {
-				b = getbyte(stdin);
-				if (isprint(b)) s[i] = b;
-					else s[i] = '.';
-			}
-			for (j=0; j<=(15-i); j++) printf("   ");
+	while (!feof(stdin) && (address < end)) {
+		printf("%08x : ", address);
+
+		const uint32_t reamaining_bytes = end - address;
+		const int  bytes_to_print = (reamaining_bytes > 16) ? 16 : reamaining_bytes;
+
+		for (int i = 0; i < bytes_to_print; ++i) {
+			const int byte = getbyte();
+			fputc(isprint(byte) ? byte : '.', stdout);
 		}
-		s[i] = '\0';
-		printf("%s\n",s);
+		fputc('\n', stdout);
 	}
 }
 
@@ -1217,7 +1221,7 @@ int main(int argc, char *argv[]) {
 	size_t index = 0;
 	while (map[index].type != End) {
 		printf(index ? "\n" : "");
-		if (map[index].type == Data) hexdump(map[index].start, map[index].end);
+		if (map[index].type == Data) datadump(map[index].start, map[index].end);
 		if (map[index].type == Code) disasm(map[index].start, map[index].end);
 		++ index;
 	}
