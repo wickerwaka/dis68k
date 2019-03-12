@@ -113,7 +113,8 @@ bool readmap(const char *filename) {
 			uint32_t start, end;
 			char type[10];
 
-			if (fscanf(fmap,"%X,%X,%9s", &start, &end, type)) {
+			const int items_read = fscanf(fmap, "%x,%x,%9s", &start, &end, type);
+			if (items_read == 3) {
 				if (index+1 >= allocated_map_size) {
 					// Default to 16 entries when first creating a map, double each time the existing
 					// estimate isn't enough for both this entry and the terminator yet to come.
@@ -138,6 +139,10 @@ bool readmap(const char *filename) {
 				}
 				++ index;
 			} else {
+				if(items_read > 0) {
+					fprintf(stderr, "Syntax error on line %lu (%d)\n", index+2, items_read);
+					return false;
+				}
 				break;	// i.e. feof.
 			}
 		}
