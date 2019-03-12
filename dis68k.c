@@ -19,7 +19,6 @@
 // Enable the #define below to print diagnostics.
 //#define PRINT_DIAGNOSTICS
 
-FILE  *fin, *fmap;
 struct OpcodeDetails {
 	uint16_t and;
 	uint16_t xor;
@@ -54,7 +53,7 @@ uint32_t ad, romstart;
 int fetched;
 bool rawmode = false;
 
-struct {
+struct MapEntry {
 	uint32_t start;
 	uint32_t end;
 	enum Type {
@@ -62,7 +61,7 @@ struct {
 		Data,
 		Code
 	} type;
-} map[100];
+} *map = NULL;
 
 char bra_tab[][4] = {
 	"BRA",	"BSR",	"BHI",	"BLS",
@@ -78,52 +77,76 @@ char scc_tab[][4] = {
 };
 char size_arr[3] = {'B','W','L'};
 
-void readmap(const char *filename) {
-	if ((fmap = fopen(filename,"rt")) == NULL) {
-		printf("Map file %s not found - Assumed all code, no data.\n", filename);
+/*!
+	Reads from @c filename and populates the global variable @c map.
+	If @c filename is @c NULL, populates @c map with the empty map.
+
+	@returns @c false if a filename is specified but could not be opened
+		or else could not properly be parsed. @c true otherwise.
+*/
+bool readmap(const char *filename) {
+	FILE *fmap;
+	if (!filename || !(fmap = fopen(filename, "rt"))) {
+		if (filename) {
+			fprintf(stderr, "Couldn't open %s as a map file\n", filename);
+			return false;
+		}
+
 		romstart = 0;
+
+		// Create a two-entry map, marking all of address space as Code.
+		map = (struct MapEntry *)malloc(sizeof(struct MapEntry) * 2);
 		map[0].start = 0L;
-		map[0].end = 0x7ffffffL;
+		map[0].end = 0xffffffff;
 		map[0].type = Code;
 		map[1].type = End;
 	} else {
 		if (!fscanf(fmap,"romstart = %X", &romstart)) {
-			printf("Error in romstart = line!\n");
-			exit(1);
+			fprintf(stderr, "Error in romstart = line!\n");
+			return false;
 		}
 
+		size_t allocated_map_size = 0;
 		size_t index = 0;
-		while (!feof(fmap)) {
-			uint32_t start, end;
-			char type[10]; /* "code" or "data" */
 
-			if (fscanf(fmap,"%X,%X,%s", &start, &end, type)) {
-				printf("%s from $%08X to $%08X\n", type, start, end);
+		while (true) {
+			uint32_t start, end;
+			char type[10];
+
+			if (fscanf(fmap,"%X,%X,%9s", &start, &end, type)) {
+				if (index+1 >= allocated_map_size) {
+					// Default to 16 entries when first creating a map, double each time the existing
+					// estimate isn't enough for both this entry and the terminator yet to come.
+					const size_t new_map_size = allocated_map_size ? (allocated_map_size * 2) : 16;
+					map = realloc(map, sizeof(struct MapEntry) * new_map_size);
+					allocated_map_size = new_map_size;
+					if (!map) {
+						fprintf(stderr, "Couldn't allocate enough space for map\n");
+						return false;
+					}
+				}
+
 				map[index].start = start;
 				map[index].end = end;
 				map[index].type = End;
 				if(strcmp(type,"data")==0) map[index].type = Data;
 				if(strcmp(type,"code")==0) map[index].type = Code;
+
 				if (map[index].type == End) {
-					printf("Error in map file line %lu ('code' or 'data' misspelt)\n", index+2);
-					exit(1);
+					fprintf(stderr, "Couldn't parse type in map file at line %lu ('code' or 'data' misspelt)\n", index+2);
+					return false;
 				}
 				++ index;
-				if (index > 99) {
-					printf("Sorry, this version allows 100 map entries only.\n");
-					printf("Please register and ask for a customised program\n");
-					printf("that will meet your needs.\n");
-					exit(1);
-				}
 			} else {
-				break;
+				break;	// i.e. feof.
 			}
 		}
 
 		map[index].type = End;
-		printf("%lu Entries read.\n", index-1);
 		fclose(fmap);
 	}
+
+	return true;
 }
 
 unsigned int getbyte(FILE *f) {
@@ -175,7 +198,7 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 			break;
 		case 5  : /* reg + disp */
 		case 9  : /* pcr + disp */
-			disp = (long) getword(fin);
+			disp = (long) getword(stdin);
 			if (disp >= 32768l) disp -= 65536l;
 			if (mode == 5) {
 				sprintf(out_s,"%+i(A%i)",(int)disp,reg);
@@ -190,7 +213,7 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 			break;
 		case 6  : /* Areg with index + disp */
 		case 10 : /* PC with index + disp */
-			data = getword(fin); /* index and displacement data */
+			data = getword(stdin); /* index and displacement data */
 			disp = (data & 0x00FF);
 			if (disp >= 128) disp-=256;
 			ireg = (data & 0x7000) >> 12;
@@ -210,20 +233,20 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 				}
 			}
 			break;
-		case 7  : data = getword(fin);
+		case 7  : data = getword(stdin);
 			sprintf(out_s,"$0000%04X",data);
 			break;
-		case 8  : data = getword(fin);
-			data1 = getword(fin);
+		case 8  : data = getword(stdin);
+			data1 = getword(stdin);
 			sprintf(out_s,"$%04X%04X",data,data1);
 			break;
-		case 11 : data = getword(fin);
+		case 11 : data = getword(stdin);
 			switch(size) {
 				case 0 : sprintf(out_s,"#$%02X",(data & 0x00FF));
 					break;
 				case 1 : sprintf(out_s,"#$%04X",data);
 					break;
-				case 2 : data1 = getword(fin);
+				case 2 : data1 = getword(stdin);
 					sprintf(out_s,"#$%04X%04X",data,data1);
 					break;
 			} /* switch(size) */
@@ -279,16 +302,15 @@ void disasm(unsigned long int start, unsigned long int end) {
 		printf("Address < RomStart in disasm()!\n");
 		exit(1);
 	}
-	fseek(fin,(ad-romstart),SEEK_SET); /* seek to address from file start */
 
-	while (!feof(fin) && (ad < end)) {
+	while (!feof(stdin) && (ad < end)) {
 		if (!rawmode) {
 			printf("%08X : ",ad);
 		} else {
 			printf("        ");
 		}
 		fetched = 0; /* number of words for this instr. */
-		word = getword(fin);
+		word = getword(stdin);
 		decoded = 0;
 
 		for (opnum=1; opnum <= 87; opnum++) {
@@ -408,13 +430,13 @@ void disasm(unsigned long int start, unsigned long int end) {
 							case 79 : sprintf(opcode_s,"SUBI.%c",size_arr[size]);
 								break;
 						}
-						data = getword(fin);
+						data = getword(stdin);
 						switch(size) {
 							case 0 : sprintf(source_s,"#$%02X",(data & 0x00FF));
 								break;
 							case 1 : sprintf(source_s,"#$%04X",data);
 								break;
-							case 2 : data1 = getword(fin);
+							case 2 : data1 = getword(stdin);
 								sprintf(source_s,"#$%04X%04X",data,data1);
 								break;
 						}
@@ -554,7 +576,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								sprintf(operand_s,"*%+ld",offset);
 							}
 						} else {
-							offset = (long) getword(fin);
+							offset = (long) getword(stdin);
 							if (offset >= 32768l) offset -= 65536l;
 							if (!rawmode) {
 								sprintf(operand_s,"$%08lX",ad-2+offset);
@@ -585,7 +607,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 15 : /* BCHG_IMM */
 								sprintf(opcode_s,"BCHG");
-								data = getword(fin);
+								data = getword(stdin);
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -595,7 +617,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 17 : /* BCLR_IMM */
 								sprintf(opcode_s,"BCLR");
-								data = getword(fin);
+								data = getword(stdin);
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -605,7 +627,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 19 : /* BSET_IMM */
 								sprintf(opcode_s,"BSET");
-								data = getword(fin);
+								data = getword(stdin);
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -615,7 +637,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 								break;
 							case 21 : /* BTST_IMM */
 								sprintf(opcode_s,"BTST");
-								data = getword(fin);
+								data = getword(stdin);
 								data = data & 0x002F;
 								sprintf(source_s,"#%i",data);
 								break;
@@ -691,7 +713,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						sprintf(opcode_s,"D%s",bra_tab[cc]);
 						if (cc == 0) sprintf(opcode_s,"DBT");
 						if (cc == 1) sprintf(opcode_s,"DBF");
-						offset = (long) getword(fin);
+						offset = (long) getword(stdin);
 						if (offset >= 32768l) offset -= 65536l;
 						dreg = (word & 0x0007);
 						sprintf(operand_s,"D%i,$%08lX ",dreg,ad-2+offset);
@@ -753,7 +775,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						break;
 					case 38 : /* LINK */
 						areg = (word & 0x0007);
-						offset = (long) getword(fin);
+						offset = (long) getword(stdin);
 						if (offset >= 32768l) offset -= 65536l;
 						sprintf(opcode_s,"LINK");
 						sprintf(operand_s,"A%i,#%+li",areg,offset);
@@ -862,7 +884,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						if ((dir == 0) && (dmode == 3)) break;
 						if ((dir == 1) && (dmode == 4)) break;
 
-						data = getword(fin);
+						data = getword(stdin);
 						if (dmode == 4) { /* dir == 0 if dmode == 4 !! */
 							/* reverse bits in data */
 							temp = data;
@@ -945,7 +967,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						areg = (word & 0x0007);
 						size = ((word & 0x0040) >> 6) + 1;
 						if (size == 3) break;
-						data = getword(fin);
+						data = getword(stdin);
 						sprintf(opcode_s,"MOVEP.%c",size_arr[size]);
 						if ((word & 0x0080) == 0) {
 							/* mem -> data reg */
@@ -1109,20 +1131,19 @@ void hexdump(unsigned long int start, unsigned long int end) {
 		printf("Address < RomStart in hexdump()!\n");
 		exit(1);
 	}
-	fseek(fin,(ad-romstart),SEEK_SET); /* seek to address from file start */
 
-	while (!feof(fin) && (ad < end)) {
+	while (!feof(stdin) && (ad < end)) {
 		printf("%08X : ",ad);
 		range = (end-ad);
 		if (range >= 15) {
 			for (i=0; i<=15; i++) {
-				b = getbyte(fin);
+				b = getbyte(stdin);
 				if (isprint(b)) s[i] = b;
 				else s[i] = '.';
 			}
 		} else {
 			for (i=0; i<=range; i++) {
-				b = getbyte(fin);
+				b = getbyte(stdin);
 				if (isprint(b)) s[i] = b;
 					else s[i] = '.';
 			}
@@ -1134,69 +1155,66 @@ void hexdump(unsigned long int start, unsigned long int end) {
 }
 
 int main(int argc, char *argv[]) {
-	int i;
-	char filename[20], mapfilename[20];
-	char binfilename[20], disfilename[20];
-
-	printf("68000 disasm v. 1.2  10/08/93\n\n");
-	printf("Revision list : 1.0  13/02/91\n");
-	printf("                1.1  05/03/91 : Reglist upgraded.\n");
-	printf("                                .MAP file added.\n");
-	printf("                                .MSK file removed.\n");
-	printf("                1.11 24/04/91 : MOVEA bug fixed.\n");
-	printf("                1.12 24/12/92 : SUB bug fixed.\n");
-	printf("                                EXG/AND.W book bug fixed.\n");
-	printf("                1.2  10/08/93 : Submitted to public domain.\n");
-	printf("                1.21 07/07/94 : Added 'raw' output mode.\n\n");
-
-	if ((argc != 2) && (argc != 3)) {
-		printf(" Usage : disasm <filename> {/f} {/r}\n\n");
-		printf(" filename.BIN is the input file.\n");
-		printf(" filename.MAP is the (optional) map file.\n");
-		printf(" Output is written to filename.DIS if /f option is specified.\n");
-		printf(" /r inplies /f, and output is in 'raw' format.\n\n");
-		exit(1);
+	if(argc == 1) {
+		printf("68000 disasm\n\n");
+		printf("Use -h for help\n");
+		return EXIT_SUCCESS;
 	}
 
-	strcpy(filename,argv[1]);
-	for (i=0; i<strlen(filename);i++) {
-		if (filename[i] == '.') {
-			printf("No extensions allowed in filename :\n\n");
-			printf("  DIS68k adds extensions as follows :\n");
-			printf("  <filename>.BIN - The input file\n");
-			printf("  <filename>.DIS - The output file\n");
-			printf("  <filename>.MAP - The mapping file\n");
-			exit(1);
+	char *mapfilename = NULL;
+	int argument = 1;
+	while(argument < argc) {
+		// Output plain help?
+		if(!strcmp(argv[argument], "-h")) {
+			printf("Usage: %s [-m mapfile] [-r]\n", argv[0]);
+			printf("Reads a binary file from stdin; prints disassembly to stdout.\n");
+			printf("If a mapfile is specified, it can be used to demark code and data segments.\n");
+			printf("-r enables raw mode.\n");
+			printf("Or use -v for version history\n");
+			return EXIT_SUCCESS;
 		}
-	}
-	strcpy(binfilename,filename);
-	strcat(binfilename,".BIN");
-	strcpy(disfilename,filename);
-	strcat(disfilename,".DIS");
-	strcpy(mapfilename,filename);
-	strcat(mapfilename,".MAP");
 
-	if (argc == 3) {
-		if (strcmp(argv[2],"/r")==0) {
-			printf("Writing in 'raw' mode.\n");
+		// Output version history?
+		if(!strcmp(argv[argument], "-v")) {
+			printf("Revision list : 1.0  13/02/91\n");
+			printf("                1.1  05/03/91 : Reglist upgraded.\n");
+			printf("                                .MAP file added.\n");
+			printf("                                .MSK file removed.\n");
+			printf("                1.11 24/04/91 : MOVEA bug fixed.\n");
+			printf("                1.12 24/12/92 : SUB bug fixed.\n");
+			printf("                                EXG/AND.W book bug fixed.\n");
+			printf("                1.2  10/08/93 : Submitted to public domain.\n");
+			printf("                1.21 07/07/94 : Added 'raw' output mode.\n\n");
+			printf("                2019 onwards  : See Git commit history.\n\n");
+			return EXIT_SUCCESS;
+		}
+
+		if(!strcmp(argv[argument], "-r")) {
 			rawmode = true;
+			++ argument;
+			continue;
 		}
+
+		if(!strcmp(argv[argument], "-m") && argument+1 != argc) {
+			mapfilename = argv[argument+1];
+			argument += 2;
+			continue;
+		}
+
+		fprintf(stderr, "Unrecognised option: %s", argv[argument]);
+		return EXIT_FAILURE;
 	}
 
-	readmap(mapfilename);
-
-	if ((fin = fopen(binfilename,"rb")) == NULL) { /* read binary file */
-		printf("%s does not exist\n", binfilename);
-		exit(1);
+	if (!readmap(mapfilename)) {
+		return EXIT_FAILURE;
 	}
 
-	i = 0;
-	while (map[i].type != End) {
-		printf("\n");
-		if (map[i].type == Data) hexdump(map[i].start, map[i].end);
-		if (map[i].type == Code) disasm(map[i].start, map[i].end);
-		i++;
+	size_t index = 0;
+	while (map[index].type != End) {
+		printf(index ? "\n" : "");
+		if (map[index].type == Data) hexdump(map[index].start, map[index].end);
+		if (map[index].type == Code) disasm(map[index].start, map[index].end);
+		++ index;
 	}
-	fclose(fin);
 	return 0;
 }
