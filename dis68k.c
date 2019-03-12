@@ -86,6 +86,11 @@ char size_arr[3] = {'B','W','L'};
 */
 bool readmap(const char *filename) {
 	FILE *fmap;
+
+	// Create a sixteen-item map, to be getting on with.
+	size_t allocated_map_size = 16;
+	map = (struct MapEntry *)malloc(sizeof(struct MapEntry) * allocated_map_size);
+
 	if (!filename || !(fmap = fopen(filename, "rt"))) {
 		if (filename) {
 			fprintf(stderr, "Couldn't open %s as a map file\n", filename);
@@ -93,9 +98,6 @@ bool readmap(const char *filename) {
 		}
 
 		romstart = 0;
-
-		// Create a two-entry map, marking all of address space as Code.
-		map = (struct MapEntry *)malloc(sizeof(struct MapEntry) * 2);
 		map[0].start = 0L;
 		map[0].end = 0xffffffff;
 		map[0].type = Code;
@@ -106,7 +108,6 @@ bool readmap(const char *filename) {
 			return false;
 		}
 
-		size_t allocated_map_size = 0;
 		size_t index = 0;
 
 		while (true) {
