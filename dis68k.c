@@ -1155,22 +1155,16 @@ void hexdump(unsigned long int start, unsigned long int end) {
 }
 
 int main(int argc, char *argv[]) {
-	if(argc == 1) {
-		printf("68000 disasm\n\n");
-		printf("Use -h for help\n");
-		return EXIT_SUCCESS;
-	}
-
 	char *mapfilename = NULL;
 	int argument = 1;
 	while(argument < argc) {
 		// Output plain help?
-		if(!strcmp(argv[argument], "-h")) {
+		if(!strcmp(argv[argument], "-h") || !strcmp(argv[argument], "--help")) {
 			printf("Usage: %s [-m mapfile] [-r]\n", argv[0]);
 			printf("Reads a binary file from stdin; prints disassembly to stdout.\n");
 			printf("If a mapfile is specified, it can be used to demark code and data segments.\n");
 			printf("-r enables raw mode.\n");
-			printf("Or use -v for version history\n");
+			printf("Or use -v for version history.\n");
 			return EXIT_SUCCESS;
 		}
 
@@ -1184,8 +1178,8 @@ int main(int argc, char *argv[]) {
 			printf("                1.12 24/12/92 : SUB bug fixed.\n");
 			printf("                                EXG/AND.W book bug fixed.\n");
 			printf("                1.2  10/08/93 : Submitted to public domain.\n");
-			printf("                1.21 07/07/94 : Added 'raw' output mode.\n\n");
-			printf("                2019 onwards  : See Git commit history.\n\n");
+			printf("                1.21 07/07/94 : Added 'raw' output mode.\n");
+			printf("                2019 onwards  : See Git commit history.\n");
 			return EXIT_SUCCESS;
 		}
 
