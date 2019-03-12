@@ -1169,7 +1169,7 @@ int main(int argc, char *argv[]) {
 			printf("Usage: %s [-m mapfile] [-r]\n", argv[0]);
 			printf("Reads a binary file from stdin; prints disassembly to stdout.\n");
 			printf("If a mapfile is specified, it can be used to demark code and data segments.\n");
-			printf("-r enables raw mode.\n");
+			printf("-r disables output of addresses when disassembling.\n");
 			printf("Or use -v for version history.\n");
 			return EXIT_SUCCESS;
 		}
