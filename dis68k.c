@@ -50,7 +50,6 @@ const struct OpcodeDetails optab[88] = {
 };
 
 uint32_t address, romstart;
-int fetched;
 bool rawmode = false;
 
 struct MapEntry {
@@ -189,7 +188,6 @@ unsigned int getword() {
 	if (!rawmode) {
 		printf("%04x ", word);
 	}
-	fetched ++;
 	return word;
 }
 
@@ -325,7 +323,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 		} else {
 			printf("        ");
 		}
-		fetched = 0; /* number of words for this instr. */
+		const uint32_t start_address = address;
 		word = getword();
 		decoded = 0;
 
@@ -1122,6 +1120,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 			if (decoded != 0) opnum = 88;
 		}
 
+		const uint32_t fetched = address - start_address;
 		if (!rawmode) {
 			for (i=0;i<(5-fetched);i++) printf("     ");
 		}
