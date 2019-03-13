@@ -1,6 +1,6 @@
 # dis68k
 
-_dis68k_ is a public domain disassembler for the 68000, originally released in 1991 and written in era-appropriate unstandardised C.
+_dis68k_ is a public domain disassembler for the 68000 by W. de Waal, originally developed in 1991 and written in era-appropriate unstandardised C. It was released into the public domain in 1993.
 
 This fork of dis68k seeks to modernise that source code:
 * to ensure that it builds with modern compilers;
