@@ -1177,7 +1177,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 			if (decoded) opnum = 88;
 		}
 
-		const uint32_t fetched = address - start_address;
+		const int fetched = address - start_address;
 		if (!rawmode) {
 			for (int i = 0 ; i < (5 - fetched); ++i) printf("     ");
 		}
