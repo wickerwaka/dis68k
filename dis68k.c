@@ -845,8 +845,11 @@ void disasm(unsigned long int start, unsigned long int end) {
 						*/
 
 						/* check for illegal modes */
-						if ((smode == 1) && (size == 1)) break;
-						if ((smode == 9) || (smode == 10)) break;
+						// smode=1, size=1 is legal; 36 0d
+						// if ((smode == 1) && (size == 1)) break;
+						// smode=9 is legal; 2d 40 ff ec
+						// smode=10 is legal; 30 3b 00 00
+						// if ((smode == 9) || (smode == 10)) break;
 						if (smode > 11) break;
 						if (dmode == 1) break;
 						if (dmode >= 9) break;
