@@ -1212,10 +1212,23 @@ void datadump(uint32_t start, uint32_t end) {
 		const uint32_t reamaining_bytes = end - address;
 		const int  bytes_to_print = (reamaining_bytes > 16) ? 16 : reamaining_bytes;
 
-		for (int i = 0; i < bytes_to_print; ++i) {
-			const int byte = getbyte();
-			printf("%c ", isprint(byte) ? byte : '.');
-		}
+                int toprint[16] ;
+                for (int i = 0; i < 16; ++i) {
+                        if (i >= bytes_to_print)
+                               printf("   ") ;
+                        else
+                               toprint[i] = getbyte() ;
+                }
+                printf("  ") ;
+                for (int i = 0; i < 16; ++i) {
+                        const int byte = toprint[i] ;
+                        if (i >= bytes_to_print)
+                                printf(" ") ;
+                        else if (isprint(byte))
+                                printf("%c", byte) ;
+                        else
+                                printf(".") ;
+                }
 		fputc('\n', stdout);
 	}
 }
