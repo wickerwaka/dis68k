@@ -845,8 +845,11 @@ void disasm(unsigned long int start, unsigned long int end) {
 						*/
 
 						/* check for illegal modes */
-						if ((smode == 1) && (size == 1)) break;
-						if ((smode == 9) || (smode == 10)) break;
+						// smode=1, size=1 is legal; 36 0d
+						// if ((smode == 1) && (size == 1)) break;
+						// smode=9 is legal; 2d 40 ff ec
+						// smode=10 is legal; 30 3b 00 00
+						// if ((smode == 9) || (smode == 10)) break;
 						if (smode > 11) break;
 						if (dmode == 1) break;
 						if (dmode >= 9) break;
@@ -1177,7 +1180,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 			if (decoded) opnum = 88;
 		}
 
-		const uint32_t fetched = address - start_address;
+		const int fetched = address - start_address;
 		if (!rawmode) {
 			for (int i = 0 ; i < (5 - fetched); ++i) printf("     ");
 		}
@@ -1209,10 +1212,23 @@ void datadump(uint32_t start, uint32_t end) {
 		const uint32_t reamaining_bytes = end - address;
 		const int  bytes_to_print = (reamaining_bytes > 16) ? 16 : reamaining_bytes;
 
-		for (int i = 0; i < bytes_to_print; ++i) {
-			const int byte = getbyte();
-			printf("%c ", isprint(byte) ? byte : '.');
-		}
+                int toprint[16] ;
+                for (int i = 0; i < 16; ++i) {
+                        if (i >= bytes_to_print)
+                               printf("   ") ;
+                        else
+                               toprint[i] = getbyte() ;
+                }
+                printf("  ") ;
+                for (int i = 0; i < 16; ++i) {
+                        const int byte = toprint[i] ;
+                        if (i >= bytes_to_print)
+                                printf(" ") ;
+                        else if (isprint(byte))
+                                printf("%c", byte) ;
+                        else
+                                printf(".") ;
+                }
 		fputc('\n', stdout);
 	}
 }
