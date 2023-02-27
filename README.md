@@ -11,9 +11,9 @@ This fork of dis68k seeks to modernise that source code:
 
 	dis68k < file.rom > disassembly.txt
 
-This disassembler reads from stdin and writes to stdout. You can therefore use the usual means of composition to disassemble directly from compressed files and/or to compress the output: `zcar file.gz | dis68k > disassembly.txt` or similar.
+This disassembler reads from stdin and writes to stdout. You can therefore use the usual means of composition to disassemble directly from compressed files and/or to compress the output: `zcat file.gz | dis68k > disassembly.txt` or similar.
 
-By default the disassembler will assume that the input begins at address 0 and that execution begins at address 0. You can modify that assumption with a map file.
+By default the disassembler will assume that the input begins at address 0 and that execution begins at address 0. You can modify those assumptions with a map file.
 
 ### Map Files
 
