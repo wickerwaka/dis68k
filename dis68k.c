@@ -305,8 +305,6 @@ void disasm(unsigned long int start, unsigned long int end) {
 		exit(1);
 	}
 
-	char operand_s[100];
-
 	while (!feof(stdin) && (address < end)) {
 		if (!rawmode) {
 			printf("%08x : ", address);
@@ -317,7 +315,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 		const int word = getword();
 		bool decoded = false;
 
-		char opcode_s[50], operand_s[100];
+		char opcode_s[50], operand_s[101];
 		for (int opnum = 1; opnum <= 87; ++opnum) {
 			if ((word & optab[opnum].and) == optab[opnum].xor) {
 				/* Diagnostic code */
