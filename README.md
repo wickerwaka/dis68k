@@ -22,11 +22,11 @@ Example map file:
 	romstart = FC0000
 	FC0000,FC0030,data
 	FC0030,FF0000,code
-	
+
 This says:
 
 1. the input file data should be located at address `FC0000`;
-2. treat the region starting at `FF0000` and ending just before `FC0030` as data;
+2. treat the region starting at `FC0000` and ending just before `FC0030` as data;
 3. treat the region starting at `FC0030` and ending just before `FF0000` as code.
 
 Map files are specified to the disassembler using the `-m` option, e.g.
