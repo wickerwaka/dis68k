@@ -221,7 +221,7 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 			} else {
 				const uint32_t ldata = address - 2 + displacement;
 				if (!rawmode) {
-					sprintf(out_s, "%+i(PC) {$%08u}", displacement, ldata);
+					sprintf(out_s, "%+i(PC) {$%08x}", displacement, ldata);
 				} else {
 					sprintf(out_s, "%+i(PC)", displacement);
 				}
@@ -930,7 +930,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 						const int size = ((word & 0x0040) >> 6) + 1;
 
 						if ((dmode == 0) || (dmode == 1)) break;
-						if (dmode >= 9) break;
+						if (dmode >= 11) break;
 
 						const int dir = (word & 0x0400) >> 10; /* 1 == from mem */
 						if ((dir == 0) && (dmode == 3)) break;
