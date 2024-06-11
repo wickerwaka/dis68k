@@ -221,7 +221,7 @@ void sprintmode(unsigned int mode, unsigned int reg, unsigned int size, char *ou
 			} else {
 				const uint32_t ldata = address - 2 + displacement;
 				if (!rawmode) {
-					sprintf(out_s, "%+i(PC) {$%08u}", displacement, ldata);
+					sprintf(out_s, "%+i(PC) {$%08x}", displacement, ldata);
 				} else {
 					sprintf(out_s, "%+i(PC)", displacement);
 				}
