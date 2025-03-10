@@ -26,8 +26,8 @@
 #endif
 
 struct OpcodeDetails {
-	uint16_t and;
-	uint16_t xor;
+	uint16_t mask;
+	uint16_t value;
 };
 
 const struct OpcodeDetails optab[88] = {
@@ -105,8 +105,8 @@ bool readmap(const char *filename) {
 		romstart = 0;
 		map[0].start = 0L;
 		map[0].end = 0xffffffff;
-		map[0].type = Code;
-		map[1].type = End;
+		map[0].type = MapEntry::Code;
+		map[1].type = MapEntry::End;
 	} else {
 		if (!fscanf(fmap,"romstart = %X", &romstart)) {
 			fprintf(stderr, "Error in romstart = line!\n");
@@ -125,7 +125,7 @@ bool readmap(const char *filename) {
 					// Default to 16 entries when first creating a map, double each time the existing
 					// estimate isn't enough for both this entry and the terminator yet to come.
 					const size_t new_map_size = allocated_map_size ? (allocated_map_size * 2) : 16;
-					map = realloc(map, sizeof(struct MapEntry) * new_map_size);
+					map = (MapEntry *)realloc(map, sizeof(struct MapEntry) * new_map_size);
 					allocated_map_size = new_map_size;
 					if (!map) {
 						fprintf(stderr, "Couldn't allocate enough space for map\n");
@@ -135,11 +135,11 @@ bool readmap(const char *filename) {
 
 				map[index].start = start;
 				map[index].end = end;
-				map[index].type = End;
-				if(strcmp(type,"data")==0) map[index].type = Data;
-				if(strcmp(type,"code")==0) map[index].type = Code;
+				map[index].type = MapEntry::End;
+				if(strcmp(type,"data")==0) map[index].type = MapEntry::Data;
+				if(strcmp(type,"code")==0) map[index].type = MapEntry::Code;
 
-				if (map[index].type == End) {
+				if (map[index].type == MapEntry::End) {
 					fprintf(stderr, "Couldn't parse type in map file at line %lu ('code' or 'data' misspelt)\n", index+2);
 					return false;
 				}
@@ -153,7 +153,7 @@ bool readmap(const char *filename) {
 			}
 		}
 
-		map[index].type = End;
+		map[index].type = MapEntry::End;
 		fclose(fmap);
 	}
 
@@ -317,7 +317,7 @@ void disasm(unsigned long int start, unsigned long int end) {
 
 		char opcode_s[50], operand_s[101];
 		for (int opnum = 1; opnum <= 87; ++opnum) {
-			if ((word & optab[opnum].and) == optab[opnum].xor) {
+			if ((word & optab[opnum].mask) == optab[opnum].value) {
 				/* Diagnostic code */
 				diagnostic_printf("(%i) ",opnum);
 
@@ -1286,10 +1286,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	size_t index = 0;
-	while (map[index].type != End) {
+	while (map[index].type != MapEntry::End) {
 		printf(index ? "\n" : "");
-		if (map[index].type == Data) datadump(map[index].start, map[index].end);
-		if (map[index].type == Code) disasm(map[index].start, map[index].end);
+		if (map[index].type == MapEntry::Data) datadump(map[index].start, map[index].end);
+		if (map[index].type == MapEntry::Code) disasm(map[index].start, map[index].end);
 		++ index;
 	}
 	return 0;
